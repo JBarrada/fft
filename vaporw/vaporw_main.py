@@ -13,8 +13,8 @@ IN_CHANNELS = in_audio.getnchannels()
 IN_FRAMERATE = in_audio.getframerate()
 IN_NFRAMES = in_audio.getnframes()
 
-# p = pyaudio.PyAudio()
-# out_audio = p.open(format=p.get_format_from_width(IN_SAMPLEWIDTH), channels=IN_CHANNELS, rate=IN_FRAMERATE, output=True)
+p = pyaudio.PyAudio()
+out_audio = p.open(format=p.get_format_from_width(IN_SAMPLEWIDTH), channels=IN_CHANNELS, rate=IN_FRAMERATE, output=True)
 
 pa = vaporw_compute.ProcessedAudio(IN_FRAMERATE, IN_NFRAMES)
 
@@ -33,6 +33,16 @@ while data != '' and len(data) == vaporw_compute.COMPUTE_SIZE*2:
 
     data = in_audio.readframes(vaporw_compute.COMPUTE_SIZE)
     index += vaporw_compute.COMPUTE_SIZE
+
+in_audio.rewind()
+index = 0
+data = in_audio.readframes(vaporw_compute.COMPUTE_SIZE)
+while data != '':
+    out_audio.write(data)
+    display.marker_pos = index
+    data = in_audio.readframes(vaporw_compute.COMPUTE_SIZE)
+    index += vaporw_compute.COMPUTE_SIZE
+
 
 # out_audio.stop_stream()
 # out_audio.close()

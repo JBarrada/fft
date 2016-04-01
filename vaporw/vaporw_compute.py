@@ -19,7 +19,7 @@ class WaveformData:
         self.avg_index = 0
         self.avg_rolling = 0
         self.avg_count = 0
-        self.fpe = 4096
+        self.fpe = 4096*2
         self.intensities = {}
         self.max = 0
 
@@ -47,7 +47,7 @@ class ProbDensity:
         self.avg_index = 0
         self.avg_rolling = 0
         self.avg_count = 0
-        self.fpe = 32
+        self.fpe = 8
         self.density = {}
 
     def process_frames(self, fft, index):

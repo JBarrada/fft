@@ -10,6 +10,8 @@ class Display:
     W_WIDTH = 600
     W_HEIGHT = 100
 
+    marker_pos = 0
+
     display_pa = vaporw_compute.ProcessedAudio
 
     def __init__(self, width, height):
@@ -56,10 +58,8 @@ class Display:
         sortedkeys.sort()
         for key in sortedkeys:
             display_intensity = self.display_pa.pbd.densities[key][1]/2.0
-            # glVertex2f((float(key)/self.display_pa.frames)*self.W_WIDTH, bottom+(self.display_pa.pbd.densities[key][0]/512.0)+display_intensity)
-            # glVertex2f((float(key)/self.display_pa.frames)*self.W_WIDTH, bottom+(self.display_pa.pbd.densities[key][0]/512.0)+display_intensity)
-            glVertex2f((float(key)/self.display_pa.frames)*self.W_WIDTH, bottom+((self.display_pa.pbd.densities[key][0]/513.0)*height)+display_intensity*10)
-            glVertex2f((float(key)/self.display_pa.frames)*self.W_WIDTH, bottom+((self.display_pa.pbd.densities[key][0]/513.0)*height)-display_intensity*10)
+            glVertex2f((float(key)/self.display_pa.frames)*self.W_WIDTH, bottom+((self.display_pa.pbd.densities[key][0]/513.0)*height)+display_intensity*40)
+            glVertex2f((float(key)/self.display_pa.frames)*self.W_WIDTH, bottom+((self.display_pa.pbd.densities[key][0]/513.0)*height)-display_intensity*40)
         glEnd()
         glDisable(GL_DEPTH_TEST)
 
@@ -67,4 +67,11 @@ class Display:
         glClear(GL_COLOR_BUFFER_BIT)
         self.draw_wfd(self.W_HEIGHT-(self.W_HEIGHT/2.0), self.W_HEIGHT/2.0)
         self.draw_pbd(0, self.W_HEIGHT/2.0)
+
+        glColor3f(1.0, 0, 0)
+        glBegin(GL_LINES)
+        glVertex2f((float(self.marker_pos)/self.display_pa.frames)*self.W_WIDTH, 0)
+        glVertex2f((float(self.marker_pos)/self.display_pa.frames)*self.W_WIDTH, self.W_HEIGHT)
+        glEnd()
+
         glFlush()
