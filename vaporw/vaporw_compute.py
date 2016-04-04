@@ -37,82 +37,58 @@ class WaveformData:
 
 
 class ProbDensity:
-    avg_index = 0
-    avg_rolling = None
-    avg_count = 0
-    fpe = 0
-    densities = {}
+    densities = []
 
     def __init__(self):
-        self.avg_index = 0
-        self.avg_rolling = None
-        self.avg_count = 0
-        self.fpe = 0
-        self.density = {}
+        self.densities = []
 
-    def get_spread(self, center):
+    def get_spread(self, fft, center):
         int_center = int(center)
-        total_mass = sum(self.avg_rolling)
+        total_mass = sum(fft)
         temp_sum = 0.0
-        for i in range(int_center, len(self.avg_rolling)):
-            temp_sum += self.avg_rolling[i]
+        for i in range(int_center, len(fft)):
+            temp_sum += fft[i]
             if temp_sum >= total_mass*0.5:
                 return i-int_center
         return 0
 
     def process_frames(self, fft, index):
-        self.avg_rolling = fft if self.avg_rolling is None else numpy.add(self.avg_rolling, fft)
-        self.avg_rolling[:135] = 0
-        self.avg_rolling[165:] = 0
-        self.avg_count += 1
+        tmp_fft = numpy.copy(fft)
 
-        if self.avg_count > self.fpe:
-            self.avg_rolling -= self.avg_rolling.mean()
-            self.avg_rolling = numpy.clip(self.avg_rolling, 0, 100)
-            center = scipy.ndimage.measurements.center_of_mass(self.avg_rolling)[0]
-            spead = self.get_spread(center)
-            total_mass = sum(self.avg_rolling)
-            self.densities[self.avg_index] = (center, spead, total_mass)
-            self.avg_rolling = 0
-            self.avg_count = 0
-            self.avg_index = index
+        # tmp_fft[:135] = 0
+        # tmp_fft[165:] = 0
+
+        tmp_fft -= tmp_fft.mean()
+        tmp_fft = numpy.clip(tmp_fft, 0, 100)
+        center = scipy.ndimage.measurements.center_of_mass(tmp_fft)[0]
+        spread = self.get_spread(tmp_fft, center)
+        total_mass = sum(tmp_fft)
+        self.densities += [(center, spread, total_mass)]
 
 
 class FFTData:
-    avg_index = 0
-    avg_rolling = 0
-    avg_count = 0
-    fpe = 0
-    fft = {}
+    fft = []
+    max = 0
+    count = 0
 
     def __init__(self):
-        self.avg_index = 0
-        self.avg_rolling = 0
-        self.avg_count = 0
-        self.fpe = 1
-        self.fft = {}
+        self.fft = []
         self.max = 0
 
     def process_frames(self, fft, index):
-        self.avg_rolling = numpy.add(self.avg_rolling, fft)
-        self.avg_count += 1
-
-        if self.avg_count > self.fpe:
-            self.max = max(self.avg_rolling) if max(self.avg_rolling) > self.max else self.max
-            self.fft[self.avg_index] = self.avg_rolling
-            self.avg_rolling = 0
-            self.avg_count = 0
-            self.avg_index = index
+        self.max = max(fft) if max(fft) > self.max else self.max
+        self.fft += [fft]
+        self.count = len(self.fft)
 
 
 class Similarity:
     prev = []
-    similarities = {}
+    similarities = []
     max = 0
 
     def __init__(self):
         self.prev = []
-        self.similarities = {}
+        self.similarities = []
         self.max = 0
 
     def calc_similarity(self, fft):
@@ -125,7 +101,9 @@ class Similarity:
         if len(self.prev) != 0:
             sml = self.calc_similarity(fft)
             self.max = sml if sml > self.max else self.max
-            self.similarities[index] = sml
+            self.similarities += [sml]
+        else:
+            self.similarities += [0]
         self.prev = fft[:]
 
 
@@ -160,4 +138,4 @@ class ProcessedAudio:
 
         self.fftd.process_frames(fft, index)
         self.pbd.process_frames(fft, index)
-        self.sml.process_frames(fft[135:165], index)
+        self.sml.process_frames(fft[80:], index)
