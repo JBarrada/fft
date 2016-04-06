@@ -61,8 +61,8 @@ class Display:
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
 
         self.fft_gen_tex()
-        self.pbd_gen_tex()
-        self.sml_gen_tex()
+        # self.pbd_gen_tex()
+        # self.sml_gen_tex()
 
     def start_window(self):
         glutInit()
@@ -91,6 +91,8 @@ class Display:
             self.playing = True if not self.playing else False
         if key == '`':
             self.track = True if not self.track else False
+        if key == 't':
+            self.realupdate()
         if key == '0':
             self.fft_display = True if not self.fft_display else False
         if key == '1':
@@ -245,6 +247,30 @@ class Display:
 
         glDisable(GL_TEXTURE_2D)
 
+    def realupdate(self):
+        start = time.time()
+        t_width, t_height = len(self.pa.fftd.fft), len(self.pa.fftd.fft[0])
+
+        texn = 0
+        for block in range(0, t_width-1, 256):
+
+            b_width = 256 if block+256 <= t_width else (t_width-block)
+            b_width_a = (4-(b_width % 4))+b_width if b_width % 4 != 0 else b_width
+
+            bitmap = [0]*(t_height*b_width_a)
+            for x in range(block, block+b_width):
+                normalized = self.pa.fftd.fft[x] / self.pa.fftd.max
+                normalized *= 0xff
+                for y in range(t_height):
+                    bitmap[y*b_width_a+(x-block)+0] = int(normalized[y])
+
+            tex_id = self.fft_tex[texn]
+            glBindTexture(GL_TEXTURE_2D, tex_id)
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, b_width_a, t_height, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, bitmap)
+            texn += 1
+
+        print(time.time()-start)
+
     def fft_gen_tex(self):
         start = time.time()
         t_width, t_height = len(self.pa.fftd.fft), len(self.pa.fftd.fft[0])
@@ -260,6 +286,8 @@ class Display:
                 normalized *= 0xff
                 for y in range(t_height):
                     bitmap[y*b_width_a+(x-block)] = int(normalized[y])
+
+            bitmap = [0]*(t_height*b_width_a)
 
             tex_id = glGenTextures(1)
             glBindTexture(GL_TEXTURE_2D, tex_id)
