@@ -2,11 +2,12 @@ import struct
 import threading
 import wave
 import pyaudio
+import numpy
 
 import vaporw_compute
 import vaporw_display
 
-in_audio = wave.open('test.wav', 'rb')
+in_audio = wave.open('test2.wav', 'rb')
 
 IN_SAMPLEWIDTH = in_audio.getsampwidth()
 IN_CHANNELS = in_audio.getnchannels()
@@ -30,6 +31,10 @@ while data != '' and len(data) == vaporw_compute.COMPUTE_SIZE*2:
 
     data = in_audio.readframes(vaporw_compute.COMPUTE_SIZE)
     index += vaporw_compute.COMPUTE_SIZE
+
+pa.post_process()
+
+print('max: %f   mean: %f' % (pa.fftd.max, numpy.mean(pa.fftd.fft)))
 
 loop = threading.Thread(target=display.start_window)
 loop.start()
