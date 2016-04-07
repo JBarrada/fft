@@ -165,7 +165,8 @@ class ProcessedAudio:
         fk = numpy.fft.rfft(data)
         norm = 2.0 / size
         fk *= norm
-        # k = numpy.fft.rfftfreq(num_samples, float(num_samples/float(nyquist)))
+        k = numpy.fft.rfftfreq(size, float(size/float(rate/2.0)))
+        numpy.multiply(fk, k, fk)
         return numpy.abs(fk)[:COMPUTE_SIZE/2]
 
     def post_process(self):
@@ -183,7 +184,7 @@ class ProcessedAudio:
 
     def process_samples(self, data, index):
         fft = self.do_fft(data, COMPUTE_SIZE, self.rate)
-        fft *= numpy.linspace(1, 40, len(fft))
+        # fft *= numpy.linspace(1, 40, len(fft))
         fft /= 16384.0
 
         self.fftd.process_frames(fft)

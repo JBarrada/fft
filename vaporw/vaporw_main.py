@@ -7,7 +7,7 @@ import numpy
 import vaporw_compute
 import vaporw_display
 
-in_audio = wave.open('test2.wav', 'rb')
+in_audio = wave.open('test.wav', 'rb')
 
 IN_SAMPLEWIDTH = in_audio.getsampwidth()
 IN_CHANNELS = in_audio.getnchannels()
