@@ -28,9 +28,6 @@ class ProbDensity:
     def process_frames(self, fft):
         tmp_fft = numpy.copy(fft)
 
-        # tmp_fft[:135] = 0
-        # tmp_fft[165:] = 0
-
         tmp_fft -= tmp_fft.mean()
         tmp_fft = numpy.clip(tmp_fft, 0, 100)
         center = scipy.ndimage.measurements.center_of_mass(tmp_fft)[0]
@@ -41,18 +38,36 @@ class ProbDensity:
 
 
 class FFTData:
-    fft = []
-    max = 0
+    fft_l = []
+    fft_r = []
+    max_l = 0
+    max_r = 0
     count = 0
 
     def __init__(self):
-        self.fft = []
-        self.max = 0
+        self.fft_l = []
+        self.fft_r = []
+        self.max_l = 0
+        self.max_r = 0
 
-    def process_frames(self, fft):
-        self.max = max(fft) if max(fft) > self.max else self.max
-        self.fft += [fft]
-        self.count = len(self.fft)
+    def post_process(self):
+        lr_max = max(self.max_l,  self.max_r)
+        ratio_l = numpy.mean(self.fft_l) / lr_max
+        ratio_r = numpy.mean(self.fft_r) / lr_max
+        normalize = 0.05 / ((ratio_l+ratio_r)/2.0)
+        for i in range(len(self.fft_l)):
+            numpy.clip(self.fft_l[i]*normalize, 0.0, lr_max, self.fft_l[i])
+            self.max_l = max(self.fft_l[i]) if max(self.fft_l[i]) > self.max_l else self.max_l
+
+            numpy.clip(self.fft_r[i]*normalize, 0.0, lr_max, self.fft_r[i])
+            self.max_r = max(self.fft_r[i]) if max(self.fft_r[i]) > self.max_r else self.max_r
+
+    def process_frames(self, fft_l, fft_r):
+        self.max_l = max(fft_l) if max(fft_l) > self.max_l else self.max_l
+        self.fft_l += [fft_l]
+        self.max_r = max(fft_r) if max(fft_r) > self.max_r else self.max_r
+        self.fft_r += [fft_r]
+        self.count = len(self.fft_l)
 
 
 class Similarity:
@@ -82,74 +97,96 @@ class Similarity:
 
 
 class Intensities:
-    intensities = []
-    hits = []
-    hits_high = []
-    hits_low = []
-    max = 0
-
     def __init__(self):
-        self.prev = []
-        self.intensities = []
-        self.max = 0
+        self.intensities_l = []
+        self.hits_l = []
+        self.hits_high_l = []
+        self.hits_low_l = []
+        self.max_l = 0
+        self.intensities_r = []
+        self.hits_r = []
+        self.hits_high_r = []
+        self.hits_low_r = []
+        self.max_r = 0
+
+        self.clip_low = 90
+        self.clip_high = 255
 
     def post_process(self):
-        self.hits = [0]*len(self.intensities)
-        self.hits_high = [0]*len(self.intensities)
-        self.hits_low = [0]*len(self.intensities)
+        self.hits_l = [0]*len(self.intensities_l)
+        self.hits_high_l = [0]*len(self.intensities_l)
+        self.hits_low_l = [0]*len(self.intensities_l)
 
-        prev = []
+        self.hits_r = [0]*len(self.intensities_r)
+        self.hits_high_r = [0]*len(self.intensities_r)
+        self.hits_low_r = [0]*len(self.intensities_r)
 
-        low = 0.2*self.max
-        high = 0.29*self.max
-        low_clip = numpy.mean(self.intensities)/self.max
+        averaging = 40
 
-        for i in range(len(self.intensities)):
-            val = self.intensities[i]
-            if len(prev) != 0:
-                t_high = min(((sum(prev)/len(prev))/self.max)-0.02, 1.0)
-                t_low = max(t_high-0.02, low_clip)
-                t_high = t_high*(1.0-low_clip) + low_clip
-                self.hits_high[i] = t_high
-                self.hits_low[i] = t_low
+        prev_l, prev_r = [], []
+        low_clip_l, low_clip_r = numpy.mean(self.intensities_l)/self.max_l, numpy.mean(self.intensities_r)/self.max_r
+        for i in range(len(self.intensities_l)):
+            val_l, val_r = self.intensities_l[i], self.intensities_r[i]
+            if len(prev_l) != 0 and len(prev_r) != 0:
+                t_high_l = min(((sum(prev_l)/len(prev_l))/self.max_l)-0.03, 1.0)
+                t_high_r = min(((sum(prev_r)/len(prev_r))/self.max_r)-0.03, 1.0)
+                self.hits_high_l[i] = numpy.clip(t_high_l*(1.0-low_clip_l) + low_clip_l, 0, 0.34)
+                self.hits_low_l[i] = max(t_high_l-0.02, low_clip_l)
+                self.hits_high_r[i] = numpy.clip(t_high_r*(1.0-low_clip_r) + low_clip_r, 0, 0.34)
+                self.hits_low_r[i] = max(t_high_r-0.02, low_clip_r)
+            prev_l += [val_l]
+            prev_r += [val_r]
+            if len(prev_l) > averaging:
+                del prev_l[0]
+            if len(prev_r) > averaging:
+                del prev_r[0]
 
-                # high = t_high*self.max
-                # low = t_low*self.max
+        avg_2 = averaging/2
+        self.hits_high_l[0:-avg_2] = self.hits_high_l[avg_2:]
+        self.hits_low_l[0:-avg_2] = self.hits_low_l[avg_2:]
+        self.hits_high_r[0:-avg_2] = self.hits_high_r[avg_2:]
+        self.hits_low_r[0:-avg_2] = self.hits_low_r[avg_2:]
 
-            prev += [val]
-            if len(prev) > 10:
-                del prev[0]
+        trig_l, trig_r = False, False
+        cool_l, cool_r = 0, 0
+        for i in range(len(self.intensities_l)):
+            val_l, val_r = self.intensities_l[i], self.intensities_r[i]
 
-        self.hits_high[0:-5] = self.hits_high[5:]
-        self.hits_low[0:-5] = self.hits_low[5:]
+            high_l, high_r = self.hits_high_l[i]*self.max_l, self.hits_high_r[i]*self.max_r
+            low_l, low_r = self.hits_low_l[i]*self.max_l, self.hits_low_r[i]*self.max_r
 
-        trig = False
-        for i in range(len(self.intensities)):
-            val = self.intensities[i]
+            if val_l > high_l and not trig_l and cool_l > 4:
+                trig_l = True
+                self.hits_l[i] = 1
+                cool_l = 0
+            elif val_l <= low_l or (val_l <= low_l and trig_l):
+                trig_l = False
+                self.hits_l[i] = 0
+                
+            if val_r > high_r and not trig_r and cool_r > 4:
+                trig_r = True
+                self.hits_r[i] = 1
+                cool_r = 0
+            elif val_r <= low_r or (val_r <= low_r and trig_r):
+                trig_r = False
+                self.hits_r[i] = 0
 
-            high = self.hits_high[i]*self.max
-            low = self.hits_low[i]*self.max
+            cool_l += 1
+            cool_r += 1
 
-            if val >= high and not trig:
-                trig = True
-                self.hits[i] = 1
-            elif val >= high and trig:
-                self.hits[i] = 0
-            elif val <= low:
-                trig = False
-                self.hits[i] = 0
-            else:
-                self.hits[i] = 0
-
-    def process_frames(self, fft):
-        intensity = sum(fft)
-        self.max = intensity if intensity > self.max else self.max
-        self.intensities += [intensity]
+    def process_frames(self, fft_l, fft_r):
+        intensity_l = sum(fft_l[self.clip_low:self.clip_high])
+        self.max_l = intensity_l if intensity_l > self.max_l else self.max_l
+        self.intensities_l += [intensity_l]
+        intensity_r = sum(fft_r[self.clip_low:self.clip_high])
+        self.max_r = intensity_r if intensity_r > self.max_r else self.max_r
+        self.intensities_r += [intensity_r]
 
 
 class ProcessedAudio:
     frames = 0
-    rate = 44100
+    rate = 0
+
     pbd = ProbDensity()
     sml = Similarity()
     its = Intensities()
@@ -161,7 +198,8 @@ class ProcessedAudio:
         self.pbd = ProbDensity()
         self.fftd = FFTData()
 
-    def do_fft(self, data, size, rate):
+    @staticmethod
+    def do_fft(data, size, rate):
         fk = numpy.fft.rfft(data)
         norm = 2.0 / size
         fk *= norm
@@ -170,21 +208,15 @@ class ProcessedAudio:
         return numpy.abs(fk)[:COMPUTE_SIZE/2]
 
     def post_process(self):
-        ratio = numpy.mean(self.fftd.fft) / self.fftd.max
-        normalize = 0.05 / ratio
-        for i in range(len(self.fftd.fft)):
-            self.fftd.fft[i] *= normalize
-            numpy.clip(self.fftd.fft[i], 0.0, self.fftd.max, self.fftd.fft[i])
-
-            self.pbd.process_frames(self.fftd.fft[i])
-            self.sml.process_frames(self.fftd.fft[i][90:])
-            self.its.process_frames(self.fftd.fft[i][90:])
-
+        self.fftd.post_process()
+        for i in range(len(self.fftd.fft_l)):
+            self.its.process_frames(self.fftd.fft_l[i], self.fftd.fft_r[i])
         self.its.post_process()
 
-    def process_samples(self, data, index):
-        fft = self.do_fft(data, COMPUTE_SIZE, self.rate)
-        # fft *= numpy.linspace(1, 40, len(fft))
-        fft /= 16384.0
+    def process_samples(self, samples_l, samples_r):
+        fft_l = self.do_fft(samples_l, COMPUTE_SIZE, self.rate)
+        fft_l /= 16384.0
+        fft_r = self.do_fft(samples_r, COMPUTE_SIZE, self.rate)
+        fft_r /= 16384.0
 
-        self.fftd.process_frames(fft)
+        self.fftd.process_frames(fft_l, fft_r)
