@@ -312,6 +312,86 @@ class IntensityDisplay:
 
         return bitmap
 
+
+class ProbDensDisplay:
+    def __init__(self, pa):
+        self.tex_ids_l = []
+        self.tex_ids_r = []
+        self.pa = pa
+
+    def draw(self, offset, scale, w_width, w_height, r, g, b, a=1.0):
+        half_h = w_height/2.0
+        t_width = self.pa.fftd.count
+        glEnable(GL_TEXTURE_2D)
+        glColor4f(r, g, b, a)
+
+        tex_id_n = 0
+        for block in range(0, t_width, 256):
+            b_width = 256 if block+256 <= t_width else (t_width-block)
+            b_width = (4-(b_width % 4))+b_width if b_width % 4 != 0 else b_width
+
+            tex_offset = (float(block)/t_width)*(w_width*scale)
+            tex_width = (float(b_width)/t_width)*(w_width*scale)
+
+            if 0-tex_width < offset+tex_offset < w_width:
+                Texture.draw_texture_block(half_h, half_h, tex_width, offset, tex_offset, self.tex_ids_l[tex_id_n])
+                Texture.draw_texture_block(0, half_h, tex_width, offset, tex_offset, self.tex_ids_r[tex_id_n])
+
+            tex_id_n += 1
+
+        glDisable(GL_TEXTURE_2D)
+
+    def create_tex(self):
+        t_width, t_height = len(self.pa.fftd.fft_l), len(self.pa.fftd.fft_l[0])
+        for block in range(0, t_width-1, 256):
+            b_width = 256 if block+256 <= t_width else (t_width-block)
+            b_width_a = (4-(b_width % 4))+b_width if b_width % 4 != 0 else b_width
+            bitmap_l = self.bitmap_gen_l(block, b_width_a, b_width, t_height)
+            bitmap_r = self.bitmap_gen_r(block, b_width_a, b_width, t_height)
+            tex_id_l = Texture.upload_texture(b_width_a, t_height, bitmap_l)
+            tex_id_r = Texture.upload_texture(b_width_a, t_height, bitmap_r)
+            self.tex_ids_l += [tex_id_l]
+            self.tex_ids_r += [tex_id_r]
+
+    def recreate_tex(self):
+        t_width, t_height = len(self.pa.fftd.fft_l), len(self.pa.fftd.fft_l[0])
+        tex_id_n = 0
+        for block in range(0, t_width-1, 256):
+            b_width = 256 if block+256 <= t_width else (t_width-block)
+            b_width_a = (4-(b_width % 4))+b_width if b_width % 4 != 0 else b_width
+            bitmap_l = self.bitmap_gen_l(block, b_width_a, b_width, t_height)
+            bitmap_r = self.bitmap_gen_l(block, b_width_a, b_width, t_height)
+            Texture.update_texture(b_width_a, t_height, bitmap_l, self.tex_ids_l[tex_id_n])
+            Texture.update_texture(b_width_a, t_height, bitmap_r, self.tex_ids_r[tex_id_n])
+            tex_id_n += 1
+
+    def bitmap_gen_l(self, block, width_a, width, height):
+        bitmap = create_string_buffer(height*width_a)
+
+        for x in range(block, block+width):
+            i_scale = self.pa.pbd.densities[x][2]/self.pa.pbd.max
+            node_y = (self.pa.pbd.densities[x][0]/(vaporw_compute.COMPUTE_SIZE/2.0))*height
+            node_i = ((self.pa.pbd.densities[x][1]*i_scale)/(vaporw_compute.COMPUTE_SIZE/2.0))*height
+
+            for y in range(int(node_y-node_i), int(node_y+node_i)):
+                bitmap[y*width_a+(x-block)] = chr(200)
+
+        return bitmap
+
+    def bitmap_gen_r(self, block, width_a, width, height):
+        bitmap = create_string_buffer(height*width_a)
+
+        for x in range(block, block+width):
+            i_scale = self.pa.pbd.densities[x][2]/self.pa.pbd.max
+            node_y = (self.pa.pbd.densities[x][0]/(vaporw_compute.COMPUTE_SIZE/2.0))*height
+            node_i = ((self.pa.pbd.densities[x][1]*i_scale)/(vaporw_compute.COMPUTE_SIZE/2.0))*height
+
+            for y in range(int(node_y-node_i), int(node_y+node_i)):
+                bitmap[y*width_a+(x-block)] = chr(200)
+
+        return bitmap
+
+
 class Display:
     in_audio = None
     out_audio = None
@@ -321,16 +401,8 @@ class Display:
     fft_display = None
     its_display = None
 
-    pbd_tex = []
-
-    ihs_tex = []
-    ith_tex = []
-    itl_tex = []
-
     W_WIDTH = 600
     W_HEIGHT = 100
-    CTEX_W = 0
-    CTEX_H = 0
 
     scale = 1.0
     offset = 0
@@ -367,8 +439,6 @@ class Display:
         glEnable(GL_BLEND)
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
         
-        self.CTEX_W, self.CTEX_H = len(self.pa.fftd.fft_l), len(self.pa.fftd.fft_l[0])
-
         self.fft_display = FFTDisplay(self.pa)
         self.fft_display.create_tex()
 
@@ -404,9 +474,9 @@ class Display:
             self.track = True if not self.track else False
         if key == '0':
             self.fft_overlay = True if not self.fft_overlay else False
+        # if key == '1':
+        #    self.pdf_overlay = True if not self.pdf_overlay else False
         if key == '1':
-            self.pdf_overlay = True if not self.pdf_overlay else False
-        if key == '2':
             self.its_overlay = True if not self.its_overlay else False
 
     def motion(self, x, y):
@@ -434,6 +504,8 @@ class Display:
                 self.survey_down = True
                 self.survey_y = glutGet(GLUT_WINDOW_HEIGHT) - y
                 norm_loc = float(self.survey_y)/glutGet(GLUT_WINDOW_HEIGHT)
+                norm_loc = (norm_loc*2.0)-1.0
+                norm_loc = 1.0+norm_loc if norm_loc < 0 else norm_loc
                 bin_loc = norm_loc*(vaporw_compute.COMPUTE_SIZE/2.0)
                 print('%3.2f (%1.3f)' % (bin_loc, norm_loc))
             else:
@@ -449,97 +521,13 @@ class Display:
         self.offset -= ((x-self.offset)*i_scale)-(x-self.offset)
         self.offset = 0 if self.offset > 0 else self.offset
 
-    def draw_tex(self, bottom, height, texids, r, g, b, a=1.0):
-        glEnable(GL_TEXTURE_2D)
-        glColor4f(r, g, b, a)
-
-        tex_n = 0
-        for block in range(0, self.CTEX_W, 256):
-            b_width = 256 if block+256 <= self.CTEX_W else (self.CTEX_W-block)
-            b_width = (4-(b_width % 4))+b_width if b_width % 4 != 0 else b_width
-
-            tex_offset = (float(block)/self.CTEX_W)*(self.W_WIDTH*self.scale)
-            tex_width = (float(b_width)/self.CTEX_W)*(self.W_WIDTH*self.scale)
-
-            if 0-tex_width < self.offset+tex_offset < self.W_WIDTH:
-                glBindTexture(GL_TEXTURE_2D, texids[tex_n])
-                glBegin(GL_QUADS)
-                glTexCoord2i(0, 0)
-                glVertex2f(self.offset+tex_offset, bottom)
-                glTexCoord2i(1, 0)
-                glVertex2f(self.offset+tex_offset+tex_width, bottom)
-                glTexCoord2i(1, 1)
-                glVertex2f(self.offset+tex_offset+tex_width, bottom+height)
-                glTexCoord2i(0, 1)
-                glVertex2f(self.offset+tex_offset, bottom+height)
-                glEnd()
-            tex_n += 1
-        glDisable(GL_TEXTURE_2D)
-
-    def ith_bitmap_gen(self, block, width_a, width, height):
-        bitmap = create_string_buffer(height*width_a)
-
-        for x in range(block, block+width):
-            intensity = int(self.pa.its.hits_high[x] * height)
-            for y in range(intensity):
-                bitmap[y*width_a+(x-block)] = chr(200)
-
-        return bitmap
-
-    def itl_bitmap_gen(self, block, width_a, width, height):
-        bitmap = create_string_buffer(height*width_a)
-
-        for x in range(block, block+width):
-            intensity = int(self.pa.its.hits_low[x] * height)
-            for y in range(intensity):
-                bitmap[y*width_a+(x-block)] = chr(200)
-
-        return bitmap
-
-    def pbd_bitmap_gen(self, block, width_a, width, height):
-        bitmap = create_string_buffer(height*width_a)
-
-        for x in range(block, block+width):
-            i_scale = self.pa.pbd.densities[x][2]/self.pa.pbd.max
-            node_y = (self.pa.pbd.densities[x][0]/(vaporw_compute.COMPUTE_SIZE/2.0))*height
-            node_i = ((self.pa.pbd.densities[x][1]*i_scale)/(vaporw_compute.COMPUTE_SIZE/2.0))*height
-
-            for y in range(int(node_y-node_i), int(node_y+node_i)):
-                bitmap[y*width_a+(x-block)] = chr(200)
-
-        return bitmap
-
-    def gen_tex(self, texids, bitmap_gen):
-        for block in range(0, self.CTEX_W-1, 256):
-            b_width = 256 if block+256 <= self.CTEX_W else (self.CTEX_W-block)
-            b_width_a = (4-(b_width % 4))+b_width if b_width % 4 != 0 else b_width
-
-            mybuffer = glGenBuffers(1)
-            glBindBuffer(GL_PIXEL_UNPACK_BUFFER, mybuffer)
-            glBufferData(GL_PIXEL_UNPACK_BUFFER, self.CTEX_H*b_width_a, None, GL_STREAM_DRAW)
-            datapointer = glMapBuffer(GL_PIXEL_UNPACK_BUFFER, GL_WRITE_ONLY)
-
-            bitmap = bitmap_gen(block, b_width_a, b_width, self.CTEX_H)
-            memmove(datapointer, addressof(bitmap), self.CTEX_H*b_width_a)
-
-            glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER)
-
-            tex_id = glGenTextures(1)
-            glBindTexture(GL_TEXTURE_2D, tex_id)
-            glBindBuffer(GL_PIXEL_UNPACK_BUFFER, mybuffer)
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_ALPHA, b_width_a, self.CTEX_H, 0, GL_ALPHA, GL_UNSIGNED_BYTE, None)
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
-            texids += [tex_id]
-            glDeleteBuffers(1, [mybuffer])
-
     def display(self):
         glClear(GL_COLOR_BUFFER_BIT)
 
         if self.fft_overlay:
             self.fft_display.draw(self.offset, self.scale, self.W_WIDTH, self.W_HEIGHT, 1, 1, 1)
-        if self.pdf_overlay:
-            self.draw_tex(0, self.W_HEIGHT, self.pbd_tex, 1, 1, 1)
+        # if self.pdf_overlay:
+        #    self.draw_tex(0, self.W_HEIGHT, self.pbd_tex, 1, 1, 1)
         if self.its_overlay:
             self.its_display.draw(self.offset, self.scale, self.W_WIDTH, self.W_HEIGHT, 1, 0, 1, 1, True, True)
 
