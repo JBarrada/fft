@@ -26,8 +26,8 @@ def init():
     gluOrtho2D(0.0, W_WIDTH, 0.0, W_HEIGHT)
 
 
-def draw_marker(pos, (r, g, b), width):
-    glColor3f(r, g, b)
+def draw_marker(pos, color, width):
+    glColor3f(color[0], color[1], color[2])
     ys = numpy.logspace(math.log10(W_HEIGHT), 0, len(fft_data))
 
     a = width*float(W_WIDTH/4)*2
@@ -100,7 +100,8 @@ def display():
 
     if len(peaks):
         max_sustain = max(peaks, key=itemgetter(1))[1]
-        draw_text(0, W_HEIGHT-15, str(max_sustain))
+        # draw_text(0, W_HEIGHT-15, str(max_sustain))
+        print(max_sustain)
     glFlush()
 
 

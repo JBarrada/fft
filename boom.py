@@ -44,6 +44,13 @@ def process_peaks(fft_data, fft_avg):
 
 
 p = pyaudio.PyAudio()
+
+info = p.get_host_api_info_by_index(0)
+numdevices = info.get('deviceCount')
+for i in range(0, numdevices):
+        if (p.get_device_info_by_host_api_device_index(0, i).get('maxInputChannels')) > 0:
+            print("Input Device id ", i, " - ", p.get_device_info_by_host_api_device_index(0, i).get('name'))
+
 stream = p.open(format=pyaudio.paInt16, channels=1, rate=44100, input=True, frames_per_buffer=FFT_SIZE, input_device_index=2)
 
 loop = threading.Thread(target=opengl.start_window)
@@ -53,6 +60,7 @@ peaks = []
 
 while True:
     frames = stream.read(FFT_SIZE)
+    # print(frames)
     samples = struct.unpack('<%dh' % FFT_SIZE, frames)
     # samples *= 1.5  # amplify
     fft = do_fft(samples, FFT_SIZE, SAMPLE_RATE)
@@ -60,9 +68,9 @@ while True:
     fft *= numpy.linspace(1, 30, len(fft))
     fft /= 16384.0
 
-    avg = numpy.average(fft[8:FFT_SIZE/8])
+    avg = numpy.average(fft[8:int(FFT_SIZE/8)])
 
-    peaks = process_peaks(fft[0:FFT_SIZE/8], avg)
+    peaks = process_peaks(fft[0:int(FFT_SIZE/8)], avg)
     if len(peaks):
         max_sustain = max(peaks, key=itemgetter(1))[1]
         peaks_clean = [(x, y, z) for (x, y, z) in peaks if y > min(5, max_sustain*0.75)]
